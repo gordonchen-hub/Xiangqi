@@ -1592,3 +1592,146 @@ style slider_vbox:
 style slider_slider:
     variant "small"
     xsize 900
+screen chessboard():
+
+    # 這裡的背景，只有單純的棋盤與底圖
+    add current_board_img:
+        xalign 0.5
+        yalign 0.01
+        zoom current_board_zoom 
+
+    # -------------------------
+    # RPG 戰鬥狀態顯示欄
+    # -------------------------
+    vbox:
+        xalign 0.02
+        yalign 0.02
+        spacing 10
+        
+        text "Lv.[player_lv] 棋士" size 35 color "#FFFFFF" outlines [(2, "#000000", 0, 0)]
+        text "資金: [player_money] 元" size 35 color "#FFD700" outlines [(2, "#000000", 0, 0)]
+        
+        if current_turn == "紅方":
+            text "▶ 輪到 [current_turn]" size 35 color "#FF5555" outlines [(2, "#000000", 0, 0)]
+        else:
+            text "▶ 輪到 [current_turn]" size 35 color "#5555FF" outlines [(2, "#000000", 0, 0)]
+
+    # -------------------------
+    # 建立 9x10 棋盤
+    # -------------------------
+    grid 9 10:
+        xalign 0.5
+        yalign 0
+
+        xspacing 29
+        yspacing 20
+
+        for y in range(10):
+            for x in range(9):
+
+                $ piece_code = board[y][x]
+
+                if piece_code > 0:
+                    $ btn_color = "#FF5555"
+                elif piece_code < 0:
+                    $ btn_color = "#5555FF"
+                else:
+                    $ btn_color = "#666666"
+
+                if (x, y) == last_move:
+                    $ btn_color = "#FFFF00"
+
+                if selected_pos != None and (x, y) == selected_pos:
+                    $ btn_color = "#00FF00"
+
+                if piece_code == 1:
+                    textbutton "帥":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == 2:
+                    textbutton "仕":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == 3:
+                    textbutton "相":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == 4:
+                    textbutton "馬":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == 5:
+                    textbutton "車":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == 6:
+                    textbutton "炮":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == 7:
+                    textbutton "兵":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+
+                elif piece_code == -1:
+                    textbutton "將":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == -2:
+                    textbutton "士":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == -3:
+                    textbutton "象":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == -4:
+                    textbutton "馬":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == -5:
+                    textbutton "車":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == -6:
+                    textbutton "包":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                elif piece_code == -7:
+                    textbutton "卒":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+                else:
+                    textbutton "十":
+                        text_size 40
+                        text_color btn_color
+                        action Return((x, y))
+
+    # -------------------------
+    # 悔棋按鈕
+    # -------------------------
+    vbox:
+        xalign 0.95
+        yalign 0.05
+        
+        textbutton "悔棋":
+            text_size 40
+            text_color "#FFFFFF"
+            action Return("undo")
+            
+        if game_mode != "PvP":
+            text "(-600元)" size 20 color "#FF5555" xalign 0.5 outlines [(2, "#000000", 0, 0)]
