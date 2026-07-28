@@ -1592,146 +1592,178 @@ style slider_vbox:
 style slider_slider:
     variant "small"
     xsize 900
+
+transform piece_normal:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.66
+
+transform piece_selected_anim:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.70
+    yoffset -3
+    ease 0.45 yoffset -7
+    ease 0.45 yoffset -3
+    repeat
+
+transform piece_check_shake:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.70
+    linear 0.04 xoffset -4
+    linear 0.04 xoffset 4
+    linear 0.04 xoffset -2
+    linear 0.04 xoffset 2
+    linear 0.20 xoffset 0
+    repeat
+
+transform ring_last_pulse:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.72
+    alpha 0.25
+    ease 0.55 alpha 0.95
+    ease 0.55 alpha 0.25
+    repeat
+
+transform ring_select_pulse:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.74
+    alpha 0.65
+    ease 0.45 zoom 0.70 alpha 1.0
+    ease 0.45 zoom 0.63 alpha 0.65
+    repeat
+
+transform ring_check_pulse:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.78
+    alpha 0.45
+    ease 0.25 zoom 0.80 alpha 1.0
+    ease 0.35 zoom 0.68 alpha 0.45
+    repeat
+
+transform ring_capture_burst:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.48
+    alpha 1.0
+    easeout 0.20 zoom 0.92 alpha 1.0
+    easeout 0.50 zoom 1.12 alpha 0.0
+
+transform empty_marker_fade:
+    xalign 0.5
+    yalign 0.5
+    zoom 0.54
+    alpha 0.35
+
+transform check_banner_pulse:
+    alpha 0.88
+    ease 0.35 alpha 1.0
+    ease 0.35 alpha 0.88
+    repeat
+
 screen chessboard():
+
+    $ board_ui = chessboard_layout(current_board_img, current_board_zoom)
 
     # 這裡的背景，只有單純的棋盤與底圖
     add current_board_img:
-        xalign 0.5
-        yalign 0.01
+        xpos board_ui["image_x"]
+        ypos board_ui["image_y"]
         zoom current_board_zoom 
 
-    # -------------------------
-    # RPG 戰鬥狀態顯示欄
-    # -------------------------
-    vbox:
+    frame:
         xalign 0.02
         yalign 0.02
-        spacing 10
-        
-        text "Lv.[player_lv] 棋士" size 35 color "#FFFFFF" outlines [(2, "#000000", 0, 0)]
-        text "資金: [player_money] 元" size 35 color "#FFD700" outlines [(2, "#000000", 0, 0)]
-        
-        if current_turn == "紅方":
-            text "▶ 輪到 [current_turn]" size 35 color "#FF5555" outlines [(2, "#000000", 0, 0)]
-        else:
-            text "▶ 輪到 [current_turn]" size 35 color "#5555FF" outlines [(2, "#000000", 0, 0)]
+        padding (18, 14)
+        background Solid("#071326CC")
+        vbox:
+            spacing 8
+            text "Lv.[player_lv] 棋士" size 30 color "#FFFFFF" outlines [(2, "#000000", 0, 0)]
+            text "資金: [player_money] 元" size 27 color "#FFD75F" outlines [(2, "#000000", 0, 0)]
+            if current_turn == "紅方":
+                text "▶ 輪到 [current_turn]" size 27 color "#FF4D5E" outlines [(2, "#000000", 0, 0)]
+            else:
+                text "▶ 輪到 [current_turn]" size 27 color "#57B7FF" outlines [(2, "#000000", 0, 0)]
+
+    if check_status:
+        frame:
+            at check_banner_pulse
+            xalign 0.5
+            yalign 0.10
+            padding (34, 12)
+            background Solid("#500018DD")
+            text check_status:
+                size 38
+                color "#FFFFFF"
+                outlines [(3, "#FF2D52", 0, 0), (6, "#000000", 0, 0)]
 
     # -------------------------
     # 建立 9x10 棋盤
     # -------------------------
     grid 9 10:
-        xalign 0.5
-        yalign 0
+        xpos board_ui["grid_x"]
+        ypos board_ui["grid_y"]
 
-        xspacing 29
-        yspacing 20
+        xspacing board_ui["xspacing"]
+        yspacing board_ui["yspacing"]
 
         for y in range(10):
             for x in range(9):
 
                 $ piece_code = board[y][x]
+                $ is_selected = selected_pos != None and (x, y) == selected_pos
+                $ is_last = (x, y) == last_move
+                $ is_capture = last_capture_pos != None and (x, y) == last_capture_pos
+                $ is_checked = check_target_pos != None and (x, y) == check_target_pos
 
-                if piece_code > 0:
-                    $ btn_color = "#FF5555"
-                elif piece_code < 0:
-                    $ btn_color = "#5555FF"
-                else:
-                    $ btn_color = "#666666"
+                button:
+                    xysize (board_ui["cell"], board_ui["cell"])
+                    background None
+                    hover_background Solid("#FFFFFF18")
+                    action Return((x, y))
 
-                if (x, y) == last_move:
-                    $ btn_color = "#FFFF00"
+                    if is_last:
+                        add "images/pieces/ring_last.png" at ring_last_pulse
 
-                if selected_pos != None and (x, y) == selected_pos:
-                    $ btn_color = "#00FF00"
+                    if is_selected:
+                        add "images/pieces/ring_select.png" at ring_select_pulse
 
-                if piece_code == 1:
-                    textbutton "帥":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == 2:
-                    textbutton "仕":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == 3:
-                    textbutton "相":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == 4:
-                    textbutton "馬":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == 5:
-                    textbutton "車":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == 6:
-                    textbutton "炮":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == 7:
-                    textbutton "兵":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
+                    if is_checked:
+                        add "images/pieces/ring_check.png" at ring_check_pulse
 
-                elif piece_code == -1:
-                    textbutton "將":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == -2:
-                    textbutton "士":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == -3:
-                    textbutton "象":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == -4:
-                    textbutton "馬":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == -5:
-                    textbutton "車":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == -6:
-                    textbutton "包":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                elif piece_code == -7:
-                    textbutton "卒":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
-                else:
-                    textbutton "十":
-                        text_size 40
-                        text_color btn_color
-                        action Return((x, y))
+                    if is_capture:
+                        add "images/pieces/ring_capture.png" at ring_capture_burst
+
+                    if piece_code != 0:
+                        if is_checked:
+                            add piece_asset(piece_code) at piece_check_shake
+                        elif is_selected:
+                            add piece_asset(piece_code) at piece_selected_anim
+                        else:
+                            add piece_asset(piece_code) at piece_normal
+                    else:
+                        add "images/pieces/empty_marker.png" at empty_marker_fade
 
     # -------------------------
     # 悔棋按鈕
     # -------------------------
-    vbox:
+    frame:
         xalign 0.95
         yalign 0.05
-        
-        textbutton "悔棋":
-            text_size 40
-            text_color "#FFFFFF"
-            action Return("undo")
-            
-        if game_mode != "PvP":
-            text "(-600元)" size 20 color "#FF5555" xalign 0.5 outlines [(2, "#000000", 0, 0)]
+        padding (14, 12)
+        background Solid("#071326CC")
+        vbox:
+            spacing 4
+            textbutton "悔棋":
+                text_size 34
+                text_color "#FFFFFF"
+                text_hover_color "#7DFFB2"
+                background Solid("#1A2B4ACC")
+                hover_background Solid("#254C6FCC")
+                action Return("undo")
+            if game_mode != "PvP":
+                text "(-600元)" size 18 color "#FF5A70" xalign 0.5 outlines [(2, "#000000", 0, 0)]

@@ -26,6 +26,9 @@ default board = []
 default selected_pos = None      
 default current_turn = "紅方"    
 default last_move = (-1, -1)     
+default last_capture_pos = None
+default check_status = ""
+default check_target_pos = None
 default game_mode = "PvE"        
 default ai_difficulty = "easy"   
 
@@ -348,6 +351,10 @@ label init_game_match:
     $ move_history = []
     $ state_history = [str(board)]
     $ last_move = (-1, -1)
+    $ last_capture_pos = None
+    $ check_status = ""
+    $ check_target_pos = None
+    $ refresh_check_status()
     show screen chessboard
     jump game_loop
 
@@ -368,6 +375,8 @@ label game_loop:
                 board[acy][acx] = board[asy][asx]
                 board[asy][asx] = 0
                 last_move = (acx, acy)
+                last_capture_pos = (acx, acy) if captured_piece != 0 else None
+                refresh_check_status()
                 renpy.restart_interaction()
                 
                 current_state_str = str(board)
@@ -396,7 +405,9 @@ label game_loop:
                     board = last_record[0]
                     current_turn = last_record[1]
                     state_history.pop()
+                    refresh_check_status()
             $ selected_pos = None
+            $ last_capture_pos = None
             jump game_loop
         else:
             if player_money >= 600:
@@ -410,12 +421,15 @@ label game_loop:
                         current_turn = last_record[1]
                         state_history.pop()
                         state_history.pop()
+                        refresh_check_status()
                     elif len(move_history) == 1:
                         last_record = move_history.pop()
                         board = last_record[0]
                         current_turn = last_record[1]
                         state_history.pop()
+                        refresh_check_status()
                 $ selected_pos = None
+                $ last_capture_pos = None
                 jump game_loop
             else:
                 "資金不足 600 元，無法悔棋！"
@@ -440,7 +454,9 @@ label game_loop:
                     board[cy][cx] = board[sy][sx]
                     board[sy][sx] = 0
                     last_move = (cx, cy)
+                    last_capture_pos = (cx, cy) if captured_piece != 0 else None
                     selected_pos = None
+                    refresh_check_status()
                     renpy.restart_interaction()
                     
                     current_state_str = str(board)

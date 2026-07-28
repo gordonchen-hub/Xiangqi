@@ -3,6 +3,8 @@ init python:
     import json
     import os
     import datetime
+    import math
+    import time
     
     # ★ 已經拔除 import renpy 和 import store，不再引發系統崩潰！
 
@@ -142,6 +144,100 @@ init python:
 
         return valid
 
+    piece_asset_map = {
+        1: "images/pieces/red_king.png",
+        2: "images/pieces/red_advisor.png",
+        3: "images/pieces/red_elephant.png",
+        4: "images/pieces/red_horse.png",
+        5: "images/pieces/red_rook.png",
+        6: "images/pieces/red_cannon.png",
+        7: "images/pieces/red_pawn.png",
+        -1: "images/pieces/black_king.png",
+        -2: "images/pieces/black_advisor.png",
+        -3: "images/pieces/black_elephant.png",
+        -4: "images/pieces/black_horse.png",
+        -5: "images/pieces/black_rook.png",
+        -6: "images/pieces/black_cannon.png",
+        -7: "images/pieces/black_pawn.png",
+    }
+
+    def piece_asset(piece_code):
+        return piece_asset_map.get(piece_code, "images/pieces/empty_marker.png")
+
+    def find_king(b, side):
+        target = 1 if side == "red" else -1
+        for y in range(10):
+            for x in range(9):
+                if b[y][x] == target:
+                    return (x, y)
+        return None
+
+    def is_in_check(b, side):
+        king_pos = find_king(b, side)
+        if king_pos is None:
+            return False
+
+        kx, ky = king_pos
+        opponent_is_black = (side == "red")
+        for sy in range(10):
+            for sx in range(9):
+                p = b[sy][sx]
+                if (opponent_is_black and p < 0) or ((not opponent_is_black) and p > 0):
+                    if is_valid_move(b, sx, sy, kx, ky):
+                        return True
+        return False
+
+    def refresh_check_status():
+        global check_status, check_target_pos
+
+        if is_in_check(board, "red"):
+            check_status = "將軍！紅方主帥受威脅"
+            check_target_pos = find_king(board, "red")
+        elif is_in_check(board, "black"):
+            check_status = "將軍！黑方將領受威脅"
+            check_target_pos = find_king(board, "black")
+        else:
+            check_status = ""
+            check_target_pos = None
+
+    board_image_sizes = {
+        "images/board_bg.png": (706, 716),
+        "images/board_bg-1.png": (434, 483),
+        "images/board_bg-2.png": (649, 724),
+        "images/board_bg-3.png": (447, 468),
+        "images/board_bg-4.png": (719, 791),
+    }
+
+    def chessboard_layout(image_name, zoom):
+        screen_w = getattr(config, "screen_width", 1920)
+        screen_h = getattr(config, "screen_height", 1080)
+        img_w, img_h = board_image_sizes.get(image_name, (706, 716))
+
+        image_w = img_w * zoom
+        image_h = img_h * zoom
+        image_x = (screen_w - image_w) / 2.0
+        image_y = (screen_h - image_h) / 2.0
+
+        # Ratios measured from the normal board image. They mark the first
+        # vertical/horizontal grid line and the opposite edge grid line.
+        grid_left = img_w * 0.085
+        grid_top = img_h * 0.031
+        grid_right = img_w * 0.923
+        grid_bottom = img_h * 0.974
+        point_dx = ((grid_right - grid_left) / 8.0) * zoom
+        point_dy = ((grid_bottom - grid_top) / 9.0) * zoom
+        cell = 72
+
+        return {
+            "image_x": int(round(image_x)),
+            "image_y": int(round(image_y)),
+            "grid_x": int(round(image_x + grid_left * zoom - cell / 2.0)),
+            "grid_y": int(round(image_y + grid_top * zoom - cell / 2.0)),
+            "xspacing": int(round(point_dx - cell)),
+            "yspacing": int(round(point_dy - cell)),
+            "cell": cell,
+        }
+
     # --- 5. AI 決策引擎 ---
     def get_all_possible_moves(b, is_black):
         moves = []
@@ -154,7 +250,33 @@ init python:
                                 moves.append((sx, sy, cx, cy))
         return moves
 
-    def alphabeta(board, depth, alpha, beta, is_maximizing, difficulty):
+    ai_piece_values = {1: 1000000, 2: 250, 3: 250, 4: 450, 5: 1000, 6: 500, 7: 100}
+
+    def quick_move_score(b, move):
+        sx, sy, cx, cy = move
+        piece = abs(b[sy][sx])
+        captured = abs(b[cy][cx])
+        score = ai_piece_values.get(captured, 0) * 8
+
+        # Prefer active, central moves when captures are equal.
+        score += max(0, 4 - abs(cx - 4)) * 3
+        score += max(0, 5 - abs(cy - 4)) * 2
+        score += ai_piece_values.get(piece, 0) * 0.01
+        return score
+
+    def ai_search_budget(difficulty):
+        if difficulty in ["story_insane", "god"]:
+            return 1.8
+        if difficulty in ["hell", "story_hard"]:
+            return 1.2
+        if difficulty == "hard":
+            return 0.9
+        return 0.35
+
+    def alphabeta(board, depth, alpha, beta, is_maximizing, difficulty, deadline=None):
+        if deadline is not None and time.perf_counter() >= deadline:
+            return evaluate_board(board, difficulty)
+
         king_b, king_r = False, False
         for row in board:
             if -1 in row: king_b = True
@@ -168,33 +290,131 @@ init python:
         
         moves = get_all_possible_moves(board, is_black=is_maximizing)
         if not moves: return -9999999 if is_maximizing else 9999999
+        moves.sort(key=lambda move: quick_move_score(board, move), reverse=True)
         
         if is_maximizing:
             max_eval = -float('inf')
             for move in moves:
+                if deadline is not None and time.perf_counter() >= deadline:
+                    break
                 sx, sy, cx, cy = move
                 temp_b = [row[:] for row in board]
                 temp_b[cy][cx] = temp_b[sy][sx]; temp_b[sy][sx] = 0
-                eval_score = alphabeta(temp_b, depth - 1, alpha, beta, False, difficulty)
+                eval_score = alphabeta(temp_b, depth - 1, alpha, beta, False, difficulty, deadline)
                 max_eval = max(max_eval, eval_score)
                 alpha = max(alpha, eval_score)
                 if beta <= alpha: break
-            return max_eval
+            return max_eval if max_eval != -float('inf') else evaluate_board(board, difficulty)
         else:
             min_eval = float('inf')
             for move in moves:
+                if deadline is not None and time.perf_counter() >= deadline:
+                    break
                 sx, sy, cx, cy = move
                 temp_b = [row[:] for row in board]
                 temp_b[cy][cx] = temp_b[sy][sx]; temp_b[sy][sx] = 0
-                eval_score = alphabeta(temp_b, depth - 1, alpha, beta, True, difficulty)
+                eval_score = alphabeta(temp_b, depth - 1, alpha, beta, True, difficulty, deadline)
                 min_eval = min(min_eval, eval_score)
                 beta = min(beta, eval_score)
                 if beta <= alpha: break
-            return min_eval
+            return min_eval if min_eval != float('inf') else evaluate_board(board, difficulty)
+
+    learned_policy_cache = None
+
+    def learned_board_key(b):
+        return "/".join(",".join(str(cell) for cell in row) for row in b)
+
+    def learned_move_code(move):
+        return "{},{},{},{}".format(move[0], move[1], move[2], move[3])
+
+    def get_learned_policy():
+        global learned_policy_cache
+
+        if learned_policy_cache is not None:
+            return learned_policy_cache
+
+        policy_path = os.path.join(config.basedir, "game", "xq_learned_policy.json")
+        try:
+            with open(policy_path, "r", encoding="utf-8") as f:
+                learned_policy_cache = json.load(f)
+        except Exception:
+            learned_policy_cache = {"metadata": {}, "positions": {}, "priors": {}}
+
+        return learned_policy_cache
+
+    def learned_prior_score(b, move, difficulty="easy"):
+        policy = get_learned_policy()
+        priors = policy.get("priors", {})
+        sx, sy, cx, cy = move
+        piece = b[sy][sx]
+        code = learned_move_code(move)
+
+        score = 0.0
+        for key, weight in (
+            ("move:{}:{}".format(piece, code), 260.0),
+            ("to:{}:{},{}".format(piece, cx, cy), 90.0),
+            ("delta:{}:{},{}".format(piece, cx - sx, cy - sy), 45.0),
+        ):
+            stat = priors.get(key)
+            if stat:
+                score += float(stat.get("score", 0.0)) * weight
+                score += math.log(float(stat.get("count", 0)) + 1.0) * (weight * 0.035)
+
+        if difficulty in ["story_insane", "god"]:
+            return score * 1.25
+        if difficulty in ["hard", "hell", "story_hard"]:
+            return score
+        return score * 0.65
+
+    def get_learned_book_move(b, legal_moves, difficulty="easy"):
+        policy = get_learned_policy()
+        position = policy.get("positions", {}).get(learned_board_key(b))
+        if not position:
+            return None
+
+        legal_codes = set(learned_move_code(move) for move in legal_moves)
+        candidates = []
+
+        for item in position.get("moves", []):
+            move = tuple(item.get("move", []))
+            if len(move) != 4:
+                continue
+            code = learned_move_code(move)
+            if code not in legal_codes:
+                continue
+
+            count = float(item.get("count", 0))
+            score = float(item.get("score", 0.0))
+            rank_score = score * 1000.0 + math.log(count + 1.0) * 120.0
+            candidates.append((rank_score, move))
+
+        if not candidates:
+            return None
+
+        candidates.sort(reverse=True)
+
+        if difficulty in ["story_insane", "god", "hard", "hell", "story_hard"]:
+            return candidates[0][1]
+
+        # Easy AI still learns, but keeps a little variety.
+        top = candidates[:min(3, len(candidates))]
+        total = sum(max(1.0, item[0] - top[-1][0] + 1.0) for item in top)
+        pick = random.random() * total
+        running = 0.0
+        for score, move in top:
+            running += max(1.0, score - top[-1][0] + 1.0)
+            if running >= pick:
+                return move
+
+        return top[0][1]
 
     def get_ai_move(board, difficulty="easy"):
         ai_moves = get_all_possible_moves(board, is_black=True)
         if not ai_moves: return None
+
+        learned_move = get_learned_book_move(board, ai_moves, difficulty)
+        if learned_move:
+            return learned_move
 
         piece_count = sum(1 for row in board for p in row if p != 0)
         
@@ -210,14 +430,21 @@ init python:
                 return move
             
         random.shuffle(ai_moves)
+        ai_moves.sort(key=lambda move: quick_move_score(board, move) + learned_prior_score(board, move, difficulty), reverse=True)
+
+        deadline = time.perf_counter() + ai_search_budget(difficulty)
         best_moves = []
         best_score = -float('inf')
         
         for move in ai_moves:
+            if time.perf_counter() >= deadline and best_moves:
+                break
+
             sx, sy, cx, cy = move
             temp_b = [row[:] for row in board]
             temp_b[cy][cx] = temp_b[sy][sx]; temp_b[sy][sx] = 0
-            score = alphabeta(temp_b, depth - 1, -float('inf'), float('inf'), False, difficulty)
+            score = alphabeta(temp_b, depth - 1, -float('inf'), float('inf'), False, difficulty, deadline)
+            score += learned_prior_score(board, move, difficulty)
             
             if difficulty == "god": 
                 if temp_b[cy][cx] > 0: score += 50
